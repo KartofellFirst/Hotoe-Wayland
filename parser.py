@@ -25,11 +25,11 @@ from random import randint
 APP_ID = ""
 for _ in range(10):
     APP_ID += str(randint(0, 99))
-BUS_ADDR = f"ipc://hotoe-bus-{APP_ID}.ipc"
+BUS_ADDR = f"ipc://hotoe-bus.ipc"
 APP_NAME = "com.application" + APP_ID
 
-
-
+WIDTH = 0.3
+HEIGHT = 0.3
 
 def parse_app():
     inline_external_assets() # must first collect all the files
@@ -60,7 +60,7 @@ def smart_method_replace(replace, replaced):
 
 def smart_listener_replace(key, js_prefix):
     global content
-    pattern = re.compile(rf"\b{re.escape(key)}\s*\{{")
+    pattern = re.compile(rf"(?<!:)\b{re.escape(key)}\s*\{{")
     result = []
     pos = 0
     while True:
