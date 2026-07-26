@@ -18,7 +18,7 @@ gi.require_version('WebKit', '6.0')
 from gi.repository import Gtk, Gio, Gdk, Gtk4LayerShell, WebKit, GLib
 
 from style import load_css
-from parser import parse_app, BUS_ADDR, APP_ID, APP_NAME, WIDTH, HEIGHT
+from parser import parse_app, BUS_ADDR, APP_ID, APP_NAME
 
 
 class HotoeEngine(Gtk.Application):
@@ -28,7 +28,7 @@ class HotoeEngine(Gtk.Application):
             flags=Gio.ApplicationFlags.FLAGS_NONE
         )
         
-        self.input_regions = [[0, 0, 500, 600]]
+        self.input_regions = [[0, 0, 0, 0]]
         self.running = True
         
         # Setup ZeroMQ message bus
@@ -56,7 +56,10 @@ class HotoeEngine(Gtk.Application):
         
     def EnhansedWebview(self):
         w = WebKit.WebView()
+        w.set_background_color(Gdk.RGBA(0.0, 0.0, 0.0, 0.01))
+        w.connect("load-changed", self.webview_page_status)
         w.load_uri(f"file://{os.path.abspath("hotoe-execute.html")}")
+        
         
         # 2 lines to setup devtools
         settings = w.get_settings()
@@ -66,20 +69,6 @@ class HotoeEngine(Gtk.Application):
         content_manager.register_script_message_handler("busMessage")
         content_manager.connect("script-message-received::busMessage", self.on_webview_message)
         
-# # Create the JS bridge after initializing
-#         js_code = """
-#             
-#         """
-#         
-#         user_script = WebKit.UserScript.new(
-#             js_code,                                              # source
-#             WebKit.UserContentInjectedFrames.ALL_FRAMES,          # injected_frames
-#             WebKit.UserScriptInjectionTime.END,                 # injection_time 
-#             None,                                                 # allow_list
-#             None                                                  # block_list
-#         )
-#         content_manager.add_script(user_script)
-#         
         return w
 
     def do_activate(self):
@@ -129,45 +118,33 @@ class HotoeEngine(Gtk.Application):
 
         self.window.set_default_size(self.monitor_w, self.monitor_h)
         self.window.set_resizable(False)
-        self.ewa_main.set_size_request(int(self.monitor_w * WIDTH), int(self.monitor_h * HEIGHT))
+        self.ewa_main.set_size_request(self.monitor_w, self.monitor_h)
 
         self.window.present()
         self.window.connect("map", self.on_window_mapped)
         
         self.ewa_main.grab_focus()
+        
 
        
+    def webview_page_status(self, webview, load_event): # STARTED -> COMMITED -> FINISHED   
+        if load_event == WebKit.LoadEvent.FINISHED:
+            self.update_regions_using_html()
                 
     def on_animation_frame(self, widget, frame_clock):
-        self.input_regions[0] = self.build_region_from_gtk_widget(self.ewa_main)
         widget.queue_draw()
         return True
     
     def on_window_mapped(self, window):
         surface = window.get_surface()
-        self.update_input_region()
         self.ewa_main.grab_focus()
     
     def on_mouse_enter(self, controller, x, y):
         self.ewa_main.grab_focus()
         self.call_event_js("focusEvent", "true")
         
-    def on_mouse_leave(self, controller):\
-        self.call_event_js("focusEvent", "false")\
-    
-    def build_region_from_gtk_widget(self, widget, padding=0):
-        width, height = widget.get_width(), widget.get_height()
-        x, y = widget.translate_coordinates(self.window, 0, 0)
-        
-        if x is None or y is None:
-            return None
-            
-        return [
-            int(x - padding),
-            int(y - padding),
-            int(width + (padding * 2)),
-            int(height + (padding * 2))
-        ]
+    def on_mouse_leave(self, controller):
+        self.call_event_js("focusEvent", "false")
 
     def update_input_region(self):
         surface = self.window.get_surface()
@@ -189,14 +166,16 @@ class HotoeEngine(Gtk.Application):
         surface.set_input_region(combined)
        
     def on_webview_message(self, manager, result):
-        """Handle messages from the webview"""
         try:
             message_str = result.to_string()
-            if message_str.startswith("fx"):
-                
-                return
-            
             data = json.loads(message_str)
+            
+            try: 
+                if data["fxAPICall"] is not None:
+                    self.API_handler(data["fxAPICall"])
+                    return 
+            except: print("[FROM JS]")
+            
             self.publish(data)
             
         except json.JSONDecodeError as e:
@@ -206,7 +185,6 @@ class HotoeEngine(Gtk.Application):
             print(f"❌ Webview message error: {e}")
             
     def message_listener(self):
-        """Listen for incoming messages from the bus"""
         while self.running:
             try:
                 message = self.sub_socket.recv_string(flags=zmq.NOBLOCK)
@@ -230,8 +208,23 @@ class HotoeEngine(Gtk.Application):
 
        
     # ==== fx API =====
-    
-    
+    def API_handler(self, data):
+        if "SIRs" in data.keys():
+            regions = []
+            for l in data["SIRs"]:
+                for i, el in enumerate(l):
+                    l[i] = max(0, int(el))
+                regions.append(l)
+            self.input_regions = regions
+            GLib.idle_add(self.update_input_region)
+            return
+        if "RIR" in data.keys():
+            self.update_regions_using_html()
+            return
+        if "CLOSE" in data.keys():
+            self.close_application()
+            
+            
             
     def on_webview_load_changed(self, webview, event):
         if event == WebKit.LoadEvent.FINISHED:
@@ -246,6 +239,29 @@ class HotoeEngine(Gtk.Application):
     def call_event_js(self, event_name, detail):
         js = f"window.dispatchEvent(new CustomEvent('{event_name}', {{ detail: {json.dumps(detail)} }}));"
         self.ewa_main.evaluate_javascript(js, -1, None, None, None, None, None)
+        
+    def update_regions_using_html(self):
+        js = """(function() {
+            const data = {fxAPICall: {SIRs: []}};
+            document.querySelectorAll('.hotoe-input-region-regulator-box').forEach((el) => { 
+                const rect = el.getBoundingClientRect();
+                data.fxAPICall.SIRs.push([rect.left, rect.top, rect.width, rect.height]);
+            });
+            window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify(data));
+        })();"""
+        self.ewa_main.evaluate_javascript(js, -1, None, None, None, None, None)
+        
+    def close_application(self):
+        self.running = False  
+        try:
+            self.pub_socket.close(0)
+            self.sub_socket.close(0)
+        except Exception as e:
+            print(f"Socket cleanup error: {e}")
+        if self.window:
+            self.window.close()
+        self.quit() 
+        
  
 
 
