@@ -21,6 +21,9 @@ Instead of calling API directly ```fx.pushString()``` use:
 > ```bash
 > button clicked
 > ```
+> 
+> <details><summary>parses into (click):</summary>
+> <pre><nobr>button onclick="fx.pushString('button clicked')"</nobr></pre></details>
 
 Adding IPC message listener:
 > ```javascript
@@ -42,6 +45,26 @@ Getting local variables after they have been setup:
 > const ipc_socket_address = {% LOCAL_BUS_ADDRESS %}
 > const application_name = {% APP_NAME %}
 > ```
+
+Closing the app:
+> ```javascript
+> CLOSE()
+> ```
+> that's it. parses into `fx.closeApplication()`
+
+Setting up the input region:
+> ```html
+> <body SIR>...whatever...</body> <!-- SIR - Set as Input Region -->
+> ```
+> 
+> now <body> does not allow clicks through it. OR you can do this by adding `hotoe-input-region-regulator-box` class
+
+To update input region after something moves / resizes / disappers, run:
+> 
+> ```javascript
+> SIRs() // SIRs - Set Input Regions
+> ```
+> or `fx.recalculateInputRegions()` in your JS
 
 --- 
 
