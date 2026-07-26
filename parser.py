@@ -1,5 +1,7 @@
 shortcuts = { # for key()
-    "push": "fx.pushString"
+    "push": "fx.pushString",
+    "SIRs": "fx.recalculateInputRegions",
+    "CLOSE": "fx.closeApplication"
 }
 
 listeners = { # for key{}
@@ -28,9 +30,6 @@ for _ in range(10):
 BUS_ADDR = f"ipc://hotoe-bus.ipc"
 APP_NAME = "com.application" + APP_ID
 
-WIDTH = 0.3
-HEIGHT = 0.3
-
 def parse_app():
     inline_external_assets() # must first collect all the files
     global content
@@ -42,6 +41,10 @@ def parse_app():
     
     content = content.replace("{% LOCAL_BUS_ADDRESS %}", BUS_ADDR)
     
+    # IRR -> input region regulator. SIR -> set input region
+    # looking for SIRs
+    content = re.sub(rf"<\s*(\w+)([^>]*?)\s+{re.escape('SIR')}([^>]*)>", r'<\1\2 class="hotoe-input-region-regulator-box"\3>', content)
+    
     for key, val in shortcuts.items():
         smart_method_replace(key, val)
     
@@ -52,35 +55,90 @@ def parse_app():
         f.write(content)
         
         
-        
 def smart_method_replace(replace, replaced):
     global content
-    pattern = rf"\b{re.escape(replace)}\s*\("
+    pattern = rf"(?<!\.)\b{re.escape(replace)}\s*\("
     content = re.sub(pattern, f"{replaced}(", content)
+
 
 def smart_listener_replace(key, js_prefix):
     global content
-    pattern = re.compile(rf"(?<!:)\b{re.escape(key)}\s*\{{")
+    pattern = re.compile(rf"(?<![:\w])\b{re.escape(key)}\s*\{{")
     result = []
     pos = 0
+
     while True:
         m = pattern.search(content, pos)
         if not m:
             result.append(content[pos:])
             break
         result.append(content[pos:m.start()])
-        # find matching closing brace by counting depth
+
+        # find matching closing brace, skipping braces inside strings/comments
         depth = 1
-        i = m.end()  # position right after the opening '{'
+        i = m.end()
+        state = None  # None | 'sq' | 'dq' | 'tpl' | 'line_comment' | 'block_comment'
+        tpl_depth = 0  # tracks nested ${ ... } inside template literals
+
         while i < len(content) and depth > 0:
-            if content[i] == '{':
-                depth += 1
-            elif content[i] == '}':
-                depth -= 1
+            c = content[i]
+            nxt = content[i + 1] if i + 1 < len(content) else ''
+
+            if state == 'line_comment':
+                if c == '\n':
+                    state = None
+            elif state == 'block_comment':
+                if c == '*' and nxt == '/':
+                    state = None
+                    i += 1
+            elif state == 'sq':
+                if c == '\\':
+                    i += 1
+                elif c == "'":
+                    state = None
+            elif state == 'dq':
+                if c == '\\':
+                    i += 1
+                elif c == '"':
+                    state = None
+            elif state == 'tpl':
+                if c == '\\':
+                    i += 1
+                elif c == '`':
+                    state = None
+                elif c == '$' and nxt == '{':
+                    # entering an interpolation — braces here DO count
+                    state = None
+                    tpl_depth += 1
+                    depth += 1
+                    i += 1
+            else:
+                if c == '/' and nxt == '/':
+                    state = 'line_comment'
+                    i += 1
+                elif c == '/' and nxt == '*':
+                    state = 'block_comment'
+                    i += 1
+                elif c == "'":
+                    state = 'sq'
+                elif c == '"':
+                    state = 'dq'
+                elif c == '`':
+                    state = 'tpl'
+                elif c == '{':
+                    depth += 1
+                elif c == '}':
+                    depth -= 1
+                    if tpl_depth > 0 and depth >= 1:
+                        # closed a ${...} interpolation, back into template text
+                        tpl_depth -= 1
+                        state = 'tpl'
             i += 1
-        body = content[m.end():i-1]  # everything between { and matching }
+
+        body = content[m.end():i - 1]
         result.append(f"{js_prefix}\n{body}\n}});")
         pos = i
+
     content = "".join(result)
 
 def inline_external_assets():
