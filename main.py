@@ -18,7 +18,7 @@ gi.require_version('WebKit', '6.0')
 from gi.repository import Gtk, Gio, Gdk, Gtk4LayerShell, WebKit, GLib
 
 from style import load_css
-from parser import parse_app, BUS_ADDR, APP_ID, APP_NAME
+from parser import parse_app, BUS_ADDR, APP_ID, APP_NAME, WIDTH, HEIGHT
 
 
 class HotoeEngine(Gtk.Application):
@@ -49,27 +49,6 @@ class HotoeEngine(Gtk.Application):
         
         print("Message bus running on " + BUS_ADDR)
 
-    def message_listener(self):
-        """Listen for incoming messages from the bus"""
-        while self.running:
-            try:
-                message = self.sub_socket.recv_string(flags=zmq.NOBLOCK)
-                data = json.loads(message)
-                
-                print(f"[BUS RECEIVED] {data}")
-                    
-            except zmq.Again:
-                time.sleep(0.01)
-            except Exception as e:
-                print(f"Message listener error: {e}")
-
-    def publish(self, data):
-        """Publish a message to the bus"""
-        try:
-            self.pub_socket.send_string(json.dumps(data))
-        except Exception as e:
-            print(f"Bus publish error: {e}")
-
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
@@ -78,6 +57,10 @@ class HotoeEngine(Gtk.Application):
     def EnhansedWebview(self):
         w = WebKit.WebView()
         w.load_uri(f"file://{os.path.abspath("hotoe-execute.html")}")
+        
+        # 2 lines to setup devtools
+        settings = w.get_settings()
+        settings.set_enable_developer_extras(True)
         
         content_manager = w.get_user_content_manager()
         content_manager.register_script_message_handler("busMessage")
@@ -123,7 +106,6 @@ class HotoeEngine(Gtk.Application):
         self.main.set_name("main-container")
         self.ewa_main.set_halign(Gtk.Align.START)
         self.ewa_main.set_valign(Gtk.Align.START)
-        self.ewa_main.set_size_request(500, 500)
         self.ewa_main.set_can_focus(True)
         self.ewa_main.connect("load-changed", self.on_webview_load_changed)
 
@@ -139,14 +121,15 @@ class HotoeEngine(Gtk.Application):
         if monitors.get_n_items() > 0:
             primary_monitor = monitors.get_item(0)
             geometry = primary_monitor.get_geometry()
-            monitor_w = geometry.width
-            monitor_h = geometry.height
+            self.monitor_w = geometry.width
+            self.monitor_h = geometry.height
         else:
-            monitor_w = 1920
-            monitor_h = 1080
+            self.monitor_w = 1920
+            self.monitor_h = 1080
 
-        self.window.set_default_size(monitor_w, monitor_h)
+        self.window.set_default_size(self.monitor_w, self.monitor_h)
         self.window.set_resizable(False)
+        self.ewa_main.set_size_request(int(self.monitor_w * WIDTH), int(self.monitor_h * HEIGHT))
 
         self.window.present()
         self.window.connect("map", self.on_window_mapped)
@@ -221,6 +204,30 @@ class HotoeEngine(Gtk.Application):
             print(f"   Raw message: {message_str if 'message_str' in locals() else 'N/A'}")
         except Exception as e:
             print(f"❌ Webview message error: {e}")
+            
+    def message_listener(self):
+        """Listen for incoming messages from the bus"""
+        while self.running:
+            try:
+                message = self.sub_socket.recv_string(flags=zmq.NOBLOCK)
+                data = json.loads(message)
+                
+                print(f"[BUS RECEIVED] {data}")
+                
+                self.send_to_js(data)
+                    
+            except zmq.Again:
+                time.sleep(0.01)
+            except Exception as e:
+                print(f"Message listener error: {e}")
+
+    def publish(self, data):
+        """Publish a message to the bus"""
+        try:
+            self.pub_socket.send_string(json.dumps(data))
+        except Exception as e:
+            print(f"Bus publish error: {e}")
+
        
     # ==== fx API =====
     
@@ -237,7 +244,7 @@ class HotoeEngine(Gtk.Application):
         self.ewa_main.evaluate_javascript(js, -1, None, None, None, None, None)
     
     def call_event_js(self, event_name, detail):
-        js = f"window.dispatchEvent(new CustomEvent('{event_name}', {{ detail: {detail} }}));"
+        js = f"window.dispatchEvent(new CustomEvent('{event_name}', {{ detail: {json.dumps(detail)} }}));"
         self.ewa_main.evaluate_javascript(js, -1, None, None, None, None, None)
  
 
