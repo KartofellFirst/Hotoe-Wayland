@@ -12,6 +12,8 @@ import zmq
 import json
 import threading
 import time
+import base64
+import mimetypes
 gi.require_version('Gtk', '4.0')
 gi.require_version('Gtk4LayerShell', '1.0')
 gi.require_version('WebKit', '6.0')
@@ -131,7 +133,7 @@ class HotoeEngine(Gtk.Application):
             
     def on_webview_load_changed(self, webview, event):
         if event == WebKit.LoadEvent.FINISHED:
-            GLib.idle_add(self.update_regions_using_html())
+            GLib.idle_add(self.update_regions_using_html)
                 
     def on_animation_frame(self, widget, frame_clock):
         widget.queue_draw()
@@ -199,6 +201,118 @@ class HotoeEngine(Gtk.Application):
         if self.window:
             self.window.close()
         self.quit() 
+        
+    def _handle_read_file(self, call_id, file_path):
+        if not file_path or not os.path.exists(file_path):
+            self.resolve_js_promise(call_id, error=f"File not found: {file_path}")
+            return
+
+        try:
+            mime_type, _ = mimetypes.guess_type(file_path)
+            is_text = mime_type and (mime_type.startswith("text/") or mime_type in ["application/json", "application/javascript"])
+
+            if is_text:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                self.resolve_js_promise(call_id, result={
+                    "type": "text",
+                    "mime": mime_type or "text/plain",
+                    "content": content
+                })
+            else:
+                # images, pdfs, audio, etc -> Base64
+                with open(file_path, "rb") as f:
+                    encoded = base64.b64encode(f.read()).decode('utf-8')
+                
+                mime = mime_type or "application/octet-stream"
+                # form a data URI so images can easily be rendered via <img src="...">
+                data_uri = f"data:{mime};base64,{encoded}"
+
+                self.resolve_js_promise(call_id, result={
+                    "type": "binary",
+                    "mime": mime,
+                    "base64": encoded,
+                    "dataUri": data_uri
+                })
+
+        except Exception as e:
+            self.resolve_js_promise(call_id, error=str(e))
+    
+    def _handle_write_file(self, call_id, file_path, content, is_base64):
+        try:
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            
+            if is_base64:
+                # For saving images or binary data sent from JS
+                binary_data = base64.b64decode(content)
+                with open(file_path, "wb") as f:
+                    f.write(binary_data)
+            else:
+                # For plain text files
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                    
+            self.resolve_js_promise(call_id, result={"success": True, "path": file_path})
+        except Exception as e:
+            self.resolve_js_promise(call_id, error=str(e))
+
+    def _handle_remove_file(self, call_id, file_path):
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                self.resolve_js_promise(call_id, result={"success": True})
+            else:
+                self.resolve_js_promise(call_id, error="File does not exist")
+        except Exception as e:
+            self.resolve_js_promise(call_id, error=str(e))
+
+    def _handle_scan_directory(self, call_id, dir_path):
+        try:
+            if not os.path.isdir(dir_path):
+                self.resolve_js_promise(call_id, error=f"Directory not found: {dir_path}")
+                return
+
+            items = []
+            with os.scandir(dir_path) as entries:
+                for entry in entries:
+                    items.append({
+                        "name": entry.name,
+                        "path": entry.path,
+                        "isDir": entry.is_dir(),
+                        "isFile": entry.is_file(),
+                        "size": entry.stat().st_size if entry.is_file() else 0
+                    })
+
+            self.resolve_js_promise(call_id, result={"directory": dir_path, "items": items})
+        except Exception as e:
+            self.resolve_js_promise(call_id, error=str(e))
+            
+    def resolve_path_shortcuts(self, path_str):
+        """Expands custom $Shortcuts and ~ into absolute system paths."""
+        if not path_str:
+            return path_str
+
+        shortcuts = {
+            "$DOWNLOADS": GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD),
+            "$DOCUMENTS": GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOCUMENTS),
+            "$DESKTOP": GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DESKTOP),
+            "$MUSIC": GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_MUSIC),
+            "$PICTURES": GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES),
+            "$VIDEOS": GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_VIDEOS),
+            # XDG
+            "$CONFIG": GLib.get_user_config_dir(),
+            "$DATA": GLib.get_user_data_dir(),
+            "$CACHE": GLib.get_user_cache_dir(),
+            "$HOME": GLib.get_home_dir(),
+        }
+
+        for key, val in shortcuts.items():
+            if val and (path_str.startswith(key) or path_str.lower().startswith(key.lower())):
+                path_str = path_str.replace(key, val, 1)
+                break
+
+        # standard tilde (~) user paths
+        return os.path.abspath(os.path.expanduser(path_str))
 
        
     # ===== fx API =====
@@ -209,11 +323,9 @@ class HotoeEngine(Gtk.Application):
             message_str = result.to_string()
             data = json.loads(message_str)
             
-            try: # try because data can contain not-array like value
-                if data["fxAPICall"] is not None:
-                    self.API_handler(data["fxAPICall"])
-                    return 
-            except: print("\n")
+            if isinstance(data, dict) and "fxAPICall" in data:
+                self.API_handler(data["fxAPICall"])
+                return
             
             self.publish(data)
             
@@ -239,6 +351,30 @@ class HotoeEngine(Gtk.Application):
         if "CLOSE" in data.keys():
             self.close_application()
             
+        # promised fxAPI calls
+        if "action" in data and "callId" in data:
+            action = data["action"]
+            call_id = data["callId"]
+            payload = data.get("payload", {})
+
+            if action == "readFile":
+                path = self.resolve_path_shortcuts(payload.get("filePath"))
+                threading.Thread(target=self._handle_read_file, args=(call_id, path), daemon=True).start()
+
+            elif action == "writeFile":
+                path = self.resolve_path_shortcuts(payload.get("filePath"))
+                content = payload.get("content", "")
+                is_b64 = payload.get("isBase64", False)
+                threading.Thread(target=self._handle_write_file, args=(call_id, path, content, is_b64), daemon=True).start()
+
+            elif action == "removeFile":
+                path = self.resolve_path_shortcuts(payload.get("filePath"))
+                threading.Thread(target=self._handle_remove_file, args=(call_id, path), daemon=True).start()
+
+            elif action == "scanDirectory":
+                path = self.resolve_path_shortcuts(payload.get("dirPath"))
+                threading.Thread(target=self._handle_scan_directory, args=(call_id, path), daemon=True).start()
+                
             
     #> ENGINE to JS <#
     def call_event_js(self, event_name, detail):
@@ -257,6 +393,14 @@ class HotoeEngine(Gtk.Application):
         })();"""
         self.ewa_main.evaluate_javascript(js, -1, None, None, None, None, None)
         
+    def resolve_js_promise(self, call_id, error=None, result=None):
+        err_json = json.dumps(error) if error else "null"
+        res_json = json.dumps(result) if result is not None else "null"
+
+        js = f"fx._resolvePromise({json.dumps(call_id)}, {err_json}, {res_json});"
+        
+        # GLib.idle_add ensures GTK UI thread safety if called from background thread
+        GLib.idle_add(lambda: self.ewa_main.evaluate_javascript(js, -1, None, None, None, None, None))
  
 
 
