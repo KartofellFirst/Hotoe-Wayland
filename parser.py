@@ -1,7 +1,11 @@
 shortcuts = { # for key()
     "push": "fx.pushString",
     "SIRs": "fx.recalculateInputRegions",
-    "CLOSE": "fx.closeApplication"
+    "CLOSE": "fx.closeApplication",
+    "write": "fx.writeFile",
+    "remove": "fx.removeFile",
+    "scan": "fx.scanDirectory",
+    "read": "fx.requestFileContent"
 }
 
 listeners = { # for key{}
