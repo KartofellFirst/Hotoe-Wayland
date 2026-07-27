@@ -125,11 +125,13 @@ class HotoeEngine(Gtk.Application):
         
         self.ewa_main.grab_focus()
         
-
-       
     def webview_page_status(self, webview, load_event): # STARTED -> COMMITED -> FINISHED   
         if load_event == WebKit.LoadEvent.FINISHED:
             self.update_regions_using_html()
+            
+    def on_webview_load_changed(self, webview, event):
+        if event == WebKit.LoadEvent.FINISHED:
+            GLib.idle_add(self.update_regions_using_html())
                 
     def on_animation_frame(self, widget, frame_clock):
         widget.queue_draw()
@@ -164,25 +166,6 @@ class HotoeEngine(Gtk.Application):
             combined.union(rect_region)
         
         surface.set_input_region(combined)
-       
-    def on_webview_message(self, manager, result):
-        try:
-            message_str = result.to_string()
-            data = json.loads(message_str)
-            
-            try: 
-                if data["fxAPICall"] is not None:
-                    self.API_handler(data["fxAPICall"])
-                    return 
-            except: print("[FROM JS]")
-            
-            self.publish(data)
-            
-        except json.JSONDecodeError as e:
-            print(f"❌ JSON decode error: {e}")
-            print(f"   Raw message: {message_str if 'message_str' in locals() else 'N/A'}")
-        except Exception as e:
-            print(f"❌ Webview message error: {e}")
             
     def message_listener(self):
         while self.running:
@@ -192,7 +175,7 @@ class HotoeEngine(Gtk.Application):
                 
                 print(f"[BUS RECEIVED] {data}")
                 
-                self.send_to_js(data)
+                self.call_event_js("busMessage", data)
                     
             except zmq.Again:
                 time.sleep(0.01)
@@ -205,9 +188,41 @@ class HotoeEngine(Gtk.Application):
             self.pub_socket.send_string(json.dumps(data))
         except Exception as e:
             print(f"Bus publish error: {e}")
+            
+    def close_application(self):
+        self.running = False  
+        try:
+            self.pub_socket.close(0)
+            self.sub_socket.close(0)
+        except Exception as e:
+            print(f"Socket cleanup error: {e}")
+        if self.window:
+            self.window.close()
+        self.quit() 
 
        
-    # ==== fx API =====
+    # ===== fx API =====
+    
+    #> JS to ENGINE <#
+    def on_webview_message(self, manager, result):
+        try:
+            message_str = result.to_string()
+            data = json.loads(message_str)
+            
+            try: # try because data can contain not-array like value
+                if data["fxAPICall"] is not None:
+                    self.API_handler(data["fxAPICall"])
+                    return 
+            except: print("\n")
+            
+            self.publish(data)
+            
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON decode error: {e}")
+            print(f"   Raw message: {message_str if 'message_str' in locals() else 'N/A'}")
+        except Exception as e:
+            print(f"❌ Webview message error: {e}")
+    
     def API_handler(self, data):
         if "SIRs" in data.keys():
             regions = []
@@ -225,23 +240,14 @@ class HotoeEngine(Gtk.Application):
             self.close_application()
             
             
-            
-    def on_webview_load_changed(self, webview, event):
-        if event == WebKit.LoadEvent.FINISHED:
-            GLib.idle_add(self.update_input_region)
-            
-    def send_to_js(self, message):
-        """Push a message into the webview as a busMessage CustomEvent"""
-        payload = json.dumps(message)
-        js = f"window.dispatchEvent(new CustomEvent('busMessage', {{ detail: {payload} }}));"
-        self.ewa_main.evaluate_javascript(js, -1, None, None, None, None, None)
-    
+    #> ENGINE to JS <#
     def call_event_js(self, event_name, detail):
         js = f"window.dispatchEvent(new CustomEvent('{event_name}', {{ detail: {json.dumps(detail)} }}));"
         self.ewa_main.evaluate_javascript(js, -1, None, None, None, None, None)
         
     def update_regions_using_html(self):
-        js = """(function() {
+        """if you dont wrap js code into single-time-use function, you'll get conflicts while creating const data = [///]"""
+        js = """(function() { 
             const data = {fxAPICall: {SIRs: []}};
             document.querySelectorAll('.hotoe-input-region-regulator-box').forEach((el) => { 
                 const rect = el.getBoundingClientRect();
@@ -250,17 +256,6 @@ class HotoeEngine(Gtk.Application):
             window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify(data));
         })();"""
         self.ewa_main.evaluate_javascript(js, -1, None, None, None, None, None)
-        
-    def close_application(self):
-        self.running = False  
-        try:
-            self.pub_socket.close(0)
-            self.sub_socket.close(0)
-        except Exception as e:
-            print(f"Socket cleanup error: {e}")
-        if self.window:
-            self.window.close()
-        self.quit() 
         
  
 
