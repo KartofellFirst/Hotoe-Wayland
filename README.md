@@ -12,8 +12,11 @@ Turn your HTML into native app in a minute!
 
 ## Showcase
 `built-in parser` allows us to make simplified API calls from every part of your document.  
-Instead of calling API directly ```fx.pushString()``` use:
+Instead of calling API directly, use:
 
+### IPC related methods:
+
+Publishing string into IPC:
 > ```html
 > <button onclick="push('button clicked')"></button>
 > ```
@@ -40,17 +43,7 @@ Adding IPC message listener:
 >     push("Got your message, dear backend!")
 > })</nobr></pre></details>
 
-Getting local variables after they have been setup: 
-> ``` javascript
-> const ipc_socket_address = {% LOCAL_BUS_ADDRESS %}
-> const application_name = {% APP_NAME %}
-> ```
-
-Closing the app:
-> ```javascript
-> CLOSE()
-> ```
-> that's it. parses into `fx.closeApplication()`
+### Input regions and focus
 
 Setting up the input region:
 > ```html
@@ -66,6 +59,36 @@ To update input region after something moves / resizes / disappers, run:
 > ```
 > or `fx.recalculateInputRegions()` in your JS
 
+To manage focus events globally:
+> ```javascript
+> focus {
+>     if (!focus) {
+>         console.log("User has removed cursor from the input region")
+>     }
+> }
+> ```
+> 
+> <details><summary>parses into (click):</summary>
+> <pre><nobr>window.addEventListener('focusEvent', function(event) {
+>     const focus = event.detail;
+>     if (!focus) {
+>         console.log("User has removed cursor from the input region")
+>     }
+> })</nobr></pre></details>
+
+### Other:
+
+Getting local variables after they have been setup: 
+> ``` javascript
+> const ipc_socket_address = {% LOCAL_BUS_ADDRESS %}
+> const application_name = {% APP_NAME %}
+> ```
+
+Closing the app:
+> ```javascript
+> CLOSE()
+> ```
+> that's it. parses into `fx.closeApplication()`
 --- 
 
 <br><br><br>
