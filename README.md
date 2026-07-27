@@ -111,7 +111,7 @@ Scanning directories:
 > scan("~/Hotoe")
 >     .then(dir => {
 >         dir.items.forEach(item => {
->             const [name, path, isDir, size, modTime] = item;
+>             const [name, path, isDir, isFile, size] = item;
 >             console.log(`${isDir ? "📁" : "📄"} ${name} (${size} bytes)`);
 >         });
 >     });
