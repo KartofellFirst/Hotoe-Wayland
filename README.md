@@ -1,3 +1,4 @@
+
 # Hotoe-Wayland 
 
 > *「ホ ト エ」.*  
@@ -12,9 +13,9 @@ Turn your HTML into native app in a minute!
 
 ## Showcase
 `built-in parser` allows us to make simplified API calls from every part of your document.  
-Instead of calling API directly, use:
+Instead of calling raw bridge APIs, you can use high-level shortcuts:
 
-### IPC related methods:
+### IPC Related Methods
 
 Publishing string into IPC:
 > ```html
@@ -32,7 +33,7 @@ Adding IPC message listener:
 > ```javascript
 > receive {
 >     console.log(message);
->     push("Got your message, dear backend!")
+>     push("Got your message, dear backend!");
 > }
 > ```
 > 
@@ -40,56 +41,141 @@ Adding IPC message listener:
 > <pre><nobr>window.addEventListener('busMessage', function(event) {
 >     const message = event.detail;
 >     console.log(message);
->     push("Got your message, dear backend!")
-> })</nobr></pre></details>
+>     push("Got your message, dear backend!");
+> });</nobr></pre></details>
 
-### Input regions and focus
+---
+
+### File System API
+
+All file operations support path shortcuts like `~/` (home directory) or `$CONFIG/`.
+<details><summary>Full list of supported shortcuts (click)</summary>
+  
+  - `$DOWNLOADS`  
+  - `$DOCUMENTS`  
+  - `$DESKTOP`  
+  - `$VIDEOS`  
+  - `$PICTURES`  
+  - `$MUSIC`   
+  
+  // XDG  
+  - `$CONFIG`  
+  - `$DATA`  
+  - `$CACHE`  
+  - `$HOME`  
+</details>
+
+Reading text files & checking existence:
+> ```javascript
+> readFile("~/Hotoe/main.py")
+>     .then(file => console.log(file.content))
+>     .catch(err => console.log("File missing or unreadable:", err));
+> ```
+> <details><summary>parses into (click):</summary>
+> <pre><nobr>fx.requestFileContent("~/Hotoe/main.py")</nobr></pre></details>
+
+Reading binary files / Opening images:
+> To load local images or binary assets into the DOM, request them as base64 and set them directly as a data URL source:
+> ```javascript
+> // Pass `true` as the second argument to request base64 encoding
+> readFile("~/Hotoe/assets/icon.png", true)
+>     .then(file => {
+>         document.querySelector('#avatar').src = `data:image/png;base64,${file.content}`;
+>     });
+> ```
+> <details><summary>parses into (click):</summary>
+> <pre><nobr>fx.requestFileContent("~/Hotoe/assets/icon.png", true)</nobr></pre></details>
+
+Creating or writing files (String or Base64):
+> ```javascript
+> // Write plain text
+> write("~/Hotoe/main.txt", "Hello World!");
+>
+> // Write raw binary/image data from a Base64 string (3rd argument = true)
+> write("~/Hotoe/saved_image.png", base64String, true)
+>     .then(() => console.log("Image binary saved!"))
+>     .catch(err => console.error(err));
+> ```
+> <details><summary>parses into (click):</summary>
+> <pre><nobr>fx.writeFile("~/Hotoe/saved_image.png", base64String, true)</nobr></pre></details>
+
+Deleting a file:
+> ```javascript
+> remove("~/Hotoe/temp.txt");
+> ```
+> <details><summary>parses into (click):</summary>
+> <pre><nobr>fx.removeFile("~/Hotoe/temp.txt")</nobr></pre></details>
+
+Scanning directories:
+> ```javascript
+> scan("~/Hotoe")
+>     .then(dir => {
+>         dir.items.forEach(item => {
+>             const [name, path, isDir, size, modTime] = item;
+>             console.log(`${isDir ? "📁" : "📄"} ${name} (${size} bytes)`);
+>         });
+>     });
+> ```
+> Each item in `dir.items` returns a fixed 5-element array:
+> 1. `name` *(string)* — File name (`"main.py"`)
+> 2. `path` *(string)* — Full resolved path (`"/home/user/Hotoe/main.py"`)
+> 3. `isDir` *(boolean)* — `true` if directory, `false` if file
+> 4. `isFile` *(boolean)* — opposite to `isDir`
+> 5. `size` *(number)* — File size in bytes
+>
+> <details><summary>parses into (click):</summary>
+> <pre><nobr>fx.scanDirectory("~/Hotoe")</nobr></pre></details>
+
+---
+
+### Input Regions & Focus
 
 Setting up the input region:
 > ```html
-> <body SIR>...whatever...</body> <!-- SIR - Set as Input Region -->
+> <body SIR>...whatever...</body> <!--SIR - Set as Input Region-->
 > ```
-> 
-> now <body> does not allow clicks through it. OR you can do this by adding `hotoe-input-region-regulator-box` class
+> Now `<body>` prevents clicks through the transparent webview overlay. Alternatively, add the `.hotoe-input-region-regulator-box` class manually.
 
-To update input region after something moves / resizes / disappers, run:
-> 
+Recalculating input regions after DOM updates (resizing/moving elements):
 > ```javascript
-> SIRs() // SIRs - Set Input Regions
+> SIRs(); // Recalculates bounding boxes
 > ```
-> or `fx.recalculateInputRegions()` in your JS
+> <details><summary>parses into (click):</summary>
+> <pre><nobr>fx.recalculateInputRegions()</nobr></pre></details>
 
-To manage focus events globally:
+Managing focus events globally:
 > ```javascript
 > focus {
 >     if (!focus) {
->         console.log("User has removed cursor from the input region")
+>         console.log("Cursor left the input region");
 >     }
 > }
 > ```
-> 
 > <details><summary>parses into (click):</summary>
 > <pre><nobr>window.addEventListener('focusEvent', function(event) {
 >     const focus = event.detail;
 >     if (!focus) {
->         console.log("User has removed cursor from the input region")
+>         console.log("Cursor left the input region");
 >     }
-> })</nobr></pre></details>
+> });</nobr></pre></details>
 
-### Other:
+---
 
-Getting local variables after they have been setup: 
-> ``` javascript
-> const ipc_socket_address = {% LOCAL_BUS_ADDRESS %}
-> const application_name = {% APP_NAME %}
-> ```
+### Other Utilities
 
-Closing the app:
+Embedding template environment variables:
 > ```javascript
-> CLOSE()
+> const ipc_socket_address = {% LOCAL_BUS_ADDRESS %};
+> const application_name = {% APP_NAME %};
 > ```
-> that's it. parses into `fx.closeApplication()`
---- 
+
+Closing the application:
+> ```javascript
+> CLOSE();
+> ```
+> <details><summary>parses into (click):</summary>
+> <pre><nobr>fx.closeApplication()</nobr></pre></details>
+
 
 <br><br><br>
 
