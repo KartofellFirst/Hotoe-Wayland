@@ -11,7 +11,17 @@ fx = {
     requestFileContent: function(filePath) { // read(path).then(file => log(file.content))
         return this._callWithPromise("readFile", { filePath: filePath });
     },
-
+    removeFile: function(filePath) { // remove(path) + optional .catch/.then
+        return this._callWithPromise("removeFile", { filePath: filePath });
+    },
+    
+    writeFile: function(filePath, content, isBase64 = false) { // write(path, content, isBase64?) + optional .catch/.then
+        return this._callWithPromise("writeFile", { filePath: filePath, content: content, isBase64: isBase64 });
+    },
+    scanDirectory: function(dirPath) { // scan()
+        return this._callWithPromise("scanDirectory", { dirPath: dirPath });
+    },
+    
     
     // system-reserved fields
     _promises: {},
@@ -20,7 +30,7 @@ fx = {
         return new Promise((resolve, reject) => {
             const callId = "call_" + (++this._callCounter) + "_" + Date.now();
             this._promises[callId] = { resolve, reject };
-
+            
             const message = {
                 fxAPICall: {
                     action: action,
@@ -36,7 +46,7 @@ fx = {
         
         const { resolve, reject } = this._promises[callId];
         delete this._promises[callId];
-
+        
         if (error) {
             reject(new Error(error));
         } else {
