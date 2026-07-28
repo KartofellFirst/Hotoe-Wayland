@@ -5,7 +5,10 @@ shortcuts = { # for key()
     "write": "fx.writeFile",
     "remove": "fx.removeFile",
     "scan": "fx.scanDirectory",
-    "read": "fx.requestFileContent"
+    "read": "fx.requestFileContent",
+    "openExternal": "fx.openExternal",
+    "exec": "fx.execute",
+    "hotkey": "fx.registerHotkey"
 }
 
 listeners = { # for key{}
