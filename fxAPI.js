@@ -14,12 +14,20 @@ fx = {
     removeFile: function(filePath) { // remove(path) + optional .catch/.then
         return this._callWithPromise("removeFile", { filePath: filePath });
     },
-    
     writeFile: function(filePath, content, isBase64 = false) { // write(path, content, isBase64?) + optional .catch/.then
         return this._callWithPromise("writeFile", { filePath: filePath, content: content, isBase64: isBase64 });
     },
     scanDirectory: function(dirPath) { // scan()
         return this._callWithPromise("scanDirectory", { dirPath: dirPath });
+    },
+    openExternal: function(URI) { // openExternal()
+        window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify({fxAPICall: {"BROWSE": URI}}))
+    },
+    execute: function(cmd, timeout = 30000) { // exec() + optional .then/.catch
+        return this._callWithPromise("execute", { cmd: cmd, timeout: timeout });
+    },
+    registerHotkey: function(accelerator, eventName) {
+        return this._callWithPromise("registerHotkey", { accelerator: accelerator, eventName: eventName });
     },
     
     
