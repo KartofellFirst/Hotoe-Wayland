@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+import sys, zmq
+
+BUS_ADDR = "ipc:///run/user/{}/hotoe-hotkeys.ipc".format(__import__("os").getuid())
+TIMEOUT_MS = 300
+
+def main():
+    if len(sys.argv) < 2:
+        print("usage: hhotkey <combo>  e.g. hhotkey SUPER+SHIFT+W", file=sys.stderr)
+        sys.exit(1)
+
+    combo = sys.argv[1].upper()
+
+    ctx = zmq.Context()
+    sock = ctx.socket(zmq.REQ)
+    sock.setsockopt(zmq.LINGER, 0)
+    sock.connect(BUS_ADDR)
+
+    poller = zmq.Poller()
+    poller.register(sock, zmq.POLLIN)
+
+    sock.send_string(combo)
+
+    if poller.poll(TIMEOUT_MS):
+        reply = sock.recv_string()
+        if reply != "ok":
+            print(f"hhotkey: '{combo}' received, but no app has registered it ({reply})", file=sys.stderr)
+    else:
+        print("hhotkey: no hotoe apps running currently", file=sys.stderr)
+        sys.exit(2)
+
+    sock.close()
+    ctx.term()
+
+if __name__ == "__main__":
+    main()
