@@ -161,12 +161,38 @@ Managing focus events globally:
 
 ---
 
+### Hotkeys
+Setting up a global hotkey combination, that works even when your app loses focus:
+> ```javascript
+> hotkey("SUPER+D", "myevent")
+> 
+> /* you can setup events listener immediately
+> or only after user allows registration (hotkey(...).then(e => / user allowed registration logic / ))
+> or warn him after he refused to do that (hotkey(...).catch(e => / user declined the request logic /))
+> */
+> window.addEventsListener("myevent", function (e) {
+>     push("user just pressed SUPER+D!")
+> })
+> ```
+> <details><summary>parses into (click):</summary>
+> <pre><nobr>fx.registerHotkey()</nobr></pre></details>
+>
+> <details><summary>Wayland problems (click)</summary>
+> Unfortunately, on Wayland reading global keyboard events is impossible.  
+> 
+> We've solved this problem by shipping small CLI utility inside our Wayland backend, but even this do not guarantee that after user allows the registration, he will not forget to bind combination to his config or will not bind it to another key combination.  
+>  
+> If event in `.then(event)` block returns with `{"method": "manually"}` - you must keep in mind the human factor it contains.
+> </details>
+
+
+---
+
 ### Other Utilities
 
 Embedding template environment variables:
 > ```javascript
 > const ipc_socket_address = {% LOCAL_BUS_ADDRESS %};
-> const application_name = {% APP_NAME %};
 > ```
 
 Closing the application:
