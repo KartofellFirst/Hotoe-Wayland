@@ -21,13 +21,25 @@ fx = {
         return this._callWithPromise("scanDirectory", { dirPath: dirPath });
     },
     openExternal: function(URI) { // openExternal()
-        window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify({fxAPICall: {"BROWSE": URI}}))
+        window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify({fxAPICall: {BROWSE: URI}}))
     },
     execute: function(cmd, timeout = 30000) { // exec() + optional .then/.catch
         return this._callWithPromise("execute", { cmd: cmd, timeout: timeout });
     },
-    registerHotkey: function(accelerator, eventName) {
+    registerHotkey: function(accelerator, eventName) { // hotkey() + optional .then/.catch
         return this._callWithPromise("registerHotkey", { accelerator: accelerator, eventName: eventName });
+    },
+    killDaemon: function(id) { // kill(pid/id) + optional .then/.catch
+        return this._callWithPromise("kill", { id: id });
+    },
+    getDaemons: function() { // getDaemons().then
+        return this._callWithPromise("getDaemons");
+    },
+    store: function(data) { // strore() 
+        window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify({fxAPICall: {STORE: data}}));
+    },
+    rob: function(index) { // rob().then(data => )
+        return this._callWithPromise("rob", {index: index})
     },
     
     
