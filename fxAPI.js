@@ -30,16 +30,19 @@ fx = {
         return this._callWithPromise("registerHotkey", { accelerator: accelerator, eventName: eventName });
     },
     killDaemon: function(id) { // kill(pid/id) + optional .then/.catch
-        return this._callWithPromise("kill", { id: id });
+        return this._callWithPromise("killDaemon", { id: id });
     },
     getDaemons: function() { // getDaemons().then
         return this._callWithPromise("getDaemons");
     },
-    store: function(data) { // strore() 
-        window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify({fxAPICall: {STORE: data}}));
+    saveToCache: function(data, key) { // strore(data, key) 
+        window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify({fxAPICall: {STORE: {data, key}}})); // not sure if that shortening works in JS
     },
-    rob: function(index) { // rob().then(data => )
-        return this._callWithPromise("rob", {index: index})
+    getKeyValues: function() { // rob().then(keys => )
+        return this._callWithPromise("getKeyValues")
+    },
+    getValueFromCache: function(key) { // grab(key).then(data => )
+        return this._callWithPromise("getValueFromCache", {key}) // im such a niche js dev.. knowing these shorthands. mom will be proud
     },
     
     
