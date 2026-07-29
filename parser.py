@@ -43,6 +43,11 @@ def parse_app():
     
     if not "<script>" in content:
         content = content.replace("</body>", "<script></script></body>")
+    if not "<head>" in content:
+        content = content.replace("<body>", "<head></head><body>")
+    
+    content = re.sub(r'<html[^>]*>', '<html>', content, flags=re.IGNORECASE) # force cleanup <html> tag. Even SIR is not allowed there
+    content = content.replace("</head>", "<style>html { background: rgba(0,0,0,0.01); }</style>") # force transparent surface
     
     content = content.replace("<script>", f"\n<script>\n{fxAPI}\n</script>\n<script>")
     
