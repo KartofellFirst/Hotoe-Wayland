@@ -16,6 +16,7 @@ import base64
 import mimetypes
 import subprocess
 import uuid
+import signal
 gi.require_version('Gtk', '4.0')
 gi.require_version('Gtk4LayerShell', '1.0')
 gi.require_version('WebKit', '6.0')
@@ -323,34 +324,60 @@ class HotoeEngine(Gtk.Application):
                         "name": entry.name,
                         "path": entry.path,
                         "isDir": entry.is_dir(),
-                        "isFile": entry.is_file(),
                         "size": entry.stat().st_size if entry.is_file() else 0
                     })
 
             self.resolve_js_promise(call_id, result={"directory": dir_path, "items": items})
         except Exception as e:
             self.resolve_js_promise(call_id, error=str(e))
-            
     
     def _exec_thread(self, call_id, payload):
         cmd = payload["cmd"]
-        timeout_ms = payload.get("timeout", 30000)
-
+        # timeout_ms = None
+        if not payload.get("daemon", False): timeout_ms = payload.get("timeout", 30000)
         try:
-            proc = subprocess.run(
-                cmd,
-                shell=isinstance(cmd, str),
-                capture_output=True,
-                text=True,
-                timeout=timeout_ms / 1000.0,
-            )
-            result = {"stdout": proc.stdout, "stderr": proc.stderr, "exitCode": proc.returncode}
-            GLib.idle_add(self.resolve_js_promise, call_id, None, result)
+            if timeout_ms:
+                proc = subprocess.run(
+                    cmd,
+                    shell=isinstance(cmd, str),
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout_ms / 1000.0,
+                )
+                result = {"stdout": proc.stdout, "stderr": proc.stderr, "exitCode": proc.returncode}
+                GLib.idle_add(self.resolve_js_promise, call_id, None, result)
+            else:
+                try: 
+                    proc = subprocess.Popen(
+                        cmd,
+                        shell=isinstance(cmd, str),
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        stdin=subprocess.DEVNULL,
+                        start_new_session=True
+                    )
+                    path = self.ensure_storage_exists()
+                    with open(path, 'r') as f:
+                        data = json.load(f)
+                    data["daemons"].append(proc.pid)
+                    with open(path, 'w') as f:
+                        json.dump(data, f)
+                    GLib.idle_add(self.resolve_js_promise, call_id, None, {"pid": proc.pid})
+                except Exception as ew: 
+                    GLib.idle_add(self.resolve_js_promise, call_id, str(ew), None)
         except subprocess.TimeoutExpired as e:
             GLib.idle_add(self.resolve_js_promise, call_id, f"Execution thread has timed out after {timeout_ms}ms", None)
         except Exception as e:
             GLib.idle_add(self.resolve_js_promise, call_id, str(e), None)
-            
+           
+    def ensure_storage_exists(self):
+        pth = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "hotoe")
+        if not os.path.exists(pth): os.makedirs(pth)
+        path = os.path.join(pth, "storage.json")
+        if not os.path.exists(path):     
+            with open(path, 'w') as f: json.dump({"daemons":[],"cache":{}}, f)
+        return path
+    
     def resolve_path_shortcuts(self, path_str):
         """Expands custom $Shortcuts and ~ into absolute system paths."""
         if not path_str:
@@ -425,7 +452,7 @@ class HotoeEngine(Gtk.Application):
         except Exception as e:
             print(f"webview message error: {e}")
     
-    def API_handler(self, data):
+    def API_handler(self, data):  # idk if Switch case exists in python, but im too lazy to even AI this
         if "SIRs" in data.keys():
             regions = []
             for l in data["SIRs"]:
@@ -442,6 +469,13 @@ class HotoeEngine(Gtk.Application):
             self.close_application()
         if "BROWSE" in data.keys():
             Gio.AppInfo.launch_default_for_uri(data["BROWSE"], None)
+            return
+        if "STORE" in data.keys():
+            path = self.ensure_storage_exists()
+            with open(path, 'r') as f: 
+                cont = json.load(f)
+                cont["cache"][data["STORE"]["key"]] = data["STORE"]["data"]
+                with open(path, 'w') as f: json.dump(cont, f)
             return
             
         # promised fxAPI calls
@@ -470,6 +504,32 @@ class HotoeEngine(Gtk.Application):
                     args=(call_id, payload),
                     daemon=True
                 ).start()
+            elif action == "killDaemon":
+                try: os.kill(payload["id"], signal.SIGTERM)
+                except ProcessLookupError: pass  
+                # to avoid spawning zombies
+                try: os.waitpid(payload["id"], 0)
+                except ChildProcessError: pass
+                path = self.ensure_storage_exists()
+                with open(path, 'r') as f: content = json.load(f)
+                if payload["id"] in content["daemons"]: content["daemons"].remove(payload["id"])
+                with open(path, 'w') as f: json.dump(content, f)
+                self.resolve_js_promise(call_id, None, "Job done")
+            elif action == "getDaemons":
+                path = self.ensure_storage_exists()
+                with open(path, 'r') as f: self.resolve_js_promise(call_id, None, json.load(f)["daemons"])
+            elif action == "getKeyValues":
+                path = self.ensure_storage_exists()
+                with open(path, 'r') as f: self.resolve_js_promise(call_id, None, list(json.load(f)["cache"].keys()))
+            elif action == "getValueFromCache":
+                path = self.ensure_storage_exists()
+                with open(path, 'r') as f: self.resolve_js_promise(call_id, None, json.load(f)["cache"].get(payload["key"]))
+            elif action == "deleteFromCache":
+                path = self.ensure_storage_exists()
+                with open(path, 'r') as f: data = json.load(f)
+                data["cache"].pop(payload["key"], None) 
+                with open(path, 'w') as f: json.dump(data, f)
+                self.resolve_js_promise(call_id, None, True)
             elif action == "registerHotkey":
                 self._handle_register_hotkey(call_id, payload.get("accelerator"), payload.get("eventName"))
                         
@@ -493,7 +553,6 @@ class HotoeEngine(Gtk.Application):
     def resolve_js_promise(self, call_id, error=None, result=None):
         err_json = json.dumps(error) if error else "null"
         res_json = json.dumps(result) if result is not None else "null"
-
         js = f"fx._resolvePromise({json.dumps(call_id)}, {err_json}, {res_json});"
         
         # GLib.idle_add ensures GTK UI thread safety if called from background thread
