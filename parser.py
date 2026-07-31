@@ -8,7 +8,13 @@ shortcuts = { # for key()
     "read": "fx.requestFileContent",
     "openExternal": "fx.openExternal",
     "exec": "fx.execute",
-    "hotkey": "fx.registerHotkey"
+    "hotkey": "fx.registerHotkey",
+    "store": "fx.saveToCache",
+    "rob": "fx.getKeyValues",
+    "grab": "fx.getValueFromCache",
+    "toss": "fx.deleteFromCache", 
+    "getDaemons": "fx.getDaemons",
+    "kill": "fx.killDaemon"
 }
 
 listeners = { # for key{}
