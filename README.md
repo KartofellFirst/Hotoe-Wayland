@@ -116,12 +116,11 @@ Scanning directories:
 >         });
 >     });
 > ```
-> Each item in `dir.items` returns a fixed 5-element array:
+> Each item in `dir.items` returns a fixed 4-element array:
 > 1. `name` *(string)* — File name (`"main.py"`)
 > 2. `path` *(string)* — Full resolved path (`"/home/user/Hotoe/main.py"`)
 > 3. `isDir` *(boolean)* — `true` if directory, `false` if file
-> 4. `isFile` *(boolean)* — opposite to `isDir`
-> 5. `size` *(number)* — File size in bytes
+> 4. `size` *(number)* — File size in bytes
 >
 > <details><summary>parses into (click):</summary>
 > <pre><nobr>fx.scanDirectory("~/Hotoe")</nobr></pre></details>
