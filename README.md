@@ -49,6 +49,7 @@ step-by-step manual:
 
 (References of the correct API handling are in Wayland repo under "# ===== fx API =====" line)<br>
 (You will have to rewrite _fxAPI.js_ for your engine specifically, but it mostly just changing webview method names)
+(On release you put _fxAPI.js_ and _EngineFiles.zip_ or _EngineExecutableStandalone_ separately)
 
 ## Wayland special
 `hhotkeys` is CLI integrated inside of Hotoe-Wayland engine. 
