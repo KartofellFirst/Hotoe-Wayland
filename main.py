@@ -93,7 +93,7 @@ class HotoeEngine(Gtk.Application):
         w.set_background_color(Gdk.RGBA(0.0, 0.0, 0.0, 0.01))
         w.connect("load-changed", self.webview_page_status)
         w.connect("decide-policy", self.on_decide_policy)
-        self.initial_uri = f"file://{os.path.abspath('hotoe-execute.html')}"
+        self.initial_uri = f"file://{os.path.abspath('execute/hotoe-execute.html')}"
         w.load_uri(self.initial_uri)
         
         
