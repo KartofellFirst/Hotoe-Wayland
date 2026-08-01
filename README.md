@@ -52,11 +52,11 @@ step-by-step manual:
 (On release you put _fxAPI.js_ and _EngineFiles.zip_ or _EngineExecutableStandalone_ separately)
 
 ## Wayland special
-`hhotkeys` is CLI integrated inside of Hotoe-Wayland engine. 
+`hhotkeys` is a CLI integrated inside of Hotoe-Wayland engine. 
 
 You can use it in your non-hotoe app
 
-Setup global IPC at <br>
+Setup a global IPC at <br>
 `ipc:///run/user/<your_identifier>/hotoe-hotkeys.ipc`
 
 Once user calls <br>
