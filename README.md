@@ -67,4 +67,4 @@ e.g. `SUPER+SHIFT+W`
 
 ---
 
-$${\color{gray}\sim With\ love\,\ from\ Hotoe\ Team}$$
+$${\color{gray}\sim\ With\ love\ from\ Hotoe\ Team\ \sim}$$
