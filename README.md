@@ -8,12 +8,10 @@
 **How it works**
 ---
 
-Your engine does not work with user files directly. They are getting parsed to provide expected file structure and behavior.  
-Also parser auto-injects your JS methods from _fxAPI.js_. You don’t have to manage `webview.content` yourself.  
-All of your dependencies will be installed except _fxAPI.js_. You don’t have to ship python, it is already in the requirements in the main repo.  
+Engine does not work with user files directly. They are getting soft or hard-parsed to provide expected file structure and behavior.  
+Parser auto-injects JS methods from _fxAPI.js_. _fxAPI.js_ will not be shipped as an engine dependency.
 
-
-The file structure you will be working with:
+The file structure it works with:
 ```rust
 dir/
 - manifest.json
@@ -24,7 +22,7 @@ dir/
 
 where  
 `hotoe-execute.html`  
--> the file you open in your webview
+-> main file for the UI
 
 `manifest.json`  
 -> contains
@@ -33,22 +31,22 @@ where
 {
     "id": "com.application.my",
     "debug": true,
-    "other_worthless_for_you_values": "yeah, we're right here"
+    "other_useless_values": "yeah, we're right here"
 }
 ```
 
-step-by-step manual:
+step-by-step engine logic:
 1. Run full monitor sized webview with transparent background<br>
 1.1. Forbid this webview to open external links. Only hotoe-execute.html can be displayed<br><br>
 2. Load hotoe-execute.html into this webview<br>
-2.1 If `debug: false` is in _manifest.json_ -> restrict access to webview devtools<br><br>
+2.1 If `debug: false` is in manifest.json -> restrict access to webview devtools<br><br>
 3. Setup local IPC at `ipc://hotoe-bus.ipc`. Register yourself as a subscriber and publisher: <br>
 3.1. Forward any IPC message to JS through <br>`evaluate_javascript("window.dispatchEvent(new CustomEvent('busMessage', data)")))`<br>
 3.2. Forward any JS message to IPC if it's not "fxAPICall" marked<br><br>
 4. Setup fxAPICalls handler in messages listener from JS. Handle them. <br>Some API calls wait for Promise –– some don't. <br>
 
 (References of the correct API handling are in Wayland repo under "# ===== fx API =====" line)<br>
-(You will have to rewrite _fxAPI.js_ for your engine specifically, but it mostly just changing webview method names)
+(You will have to rewrite _fxAPI.js_ for your engine specifically, but it mostly just changing webview method names)<br>
 (On release you put _fxAPI.js_ and _EngineFiles.zip_ or _EngineExecutableStandalone_ separately)
 
 ## Wayland special
