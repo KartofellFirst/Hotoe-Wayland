@@ -118,7 +118,7 @@ class HotoeEngine(Gtk.Application):
         return False  # important
 
     def on_inspector_detach(self, inspector):
-        self.system_input_regions = [[self.monitor_w-296, 0, 296, 180]]
+        self.system_input_regions = [[0, 0, 0, 0]]
         GLib.idle_add(self.update_input_region)
         return False
     
@@ -192,7 +192,6 @@ class HotoeEngine(Gtk.Application):
         self.window.connect("map", self.on_window_mapped)
         
         self.ewa_main.grab_focus()
-        self.system_input_regions = [[self.monitor_w-296, 0, 296, 180]] 
         
     def webview_page_status(self, webview, load_event): # STARTED -> COMMITED -> FINISHED   
         if load_event == WebKit.LoadEvent.FINISHED:
@@ -297,8 +296,8 @@ class HotoeEngine(Gtk.Application):
                 self.resolve_js_promise(call_id, result={
                     "type": "binary",
                     "mime": mime,
-                    "base64": encoded,
-                    "dataUri": data_uri
+                    "encoded": encoded,
+                    "content": data_uri
                 })
 
         except Exception as e:
@@ -309,12 +308,10 @@ class HotoeEngine(Gtk.Application):
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             
             if is_base64:
-                # saving images or binary data sent from JS
                 binary_data = base64.b64decode(content)
                 with open(file_path, "wb") as f:
                     f.write(binary_data)
             else:
-                # plain text files
                 with open(file_path, "w", encoding="utf-8") as f:
                     f.write(content)
                     
@@ -430,15 +427,17 @@ class HotoeEngine(Gtk.Application):
     def _handle_register_hotkey(self, call_id, accelerator, event_name):
         normalized = self._normalize_combo(accelerator)
         notif = HotkeyBindNotification(self.window, self.notification_overlay)
-        self.system_popup = True
+        self.system_input_regions = [[self.monitor_w-296, 0, 296, 180]] 
 
         def on_copied():
+            self.system_input_regions = [[0, 0, 0, 0]] 
+            self.update_input_region()
             self.hotkey_events[normalized] = event_name
             self.resolve_js_promise(call_id, result={"registered": True, "method": "manually"})
-            self.system_popup = False
             
         def on_denied():
-            self.system_popup = False
+            self.system_input_regions = [[0, 0, 0, 0]] 
+            self.update_input_region()
             self.resolve_js_promise(call_id, error="user denied hotkey registration")
             
         notif.show(
