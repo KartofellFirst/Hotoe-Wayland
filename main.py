@@ -380,7 +380,7 @@ class HotoeEngine(Gtk.Application):
                     data["daemons"].append(proc.pid)
                     with open(path, 'w') as f:
                         json.dump(data, f)
-                    GLib.idle_add(self.resolve_js_promise, call_id, None, {"pid": proc.pid})
+                    GLib.idle_add(self.resolve_js_promise, call_id, None, proc.pid)
                 except Exception as ew: 
                     GLib.idle_add(self.resolve_js_promise, call_id, str(ew), None)
         except subprocess.TimeoutExpired as e:
