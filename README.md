@@ -5,6 +5,16 @@
 > &nbsp; Built with GTk4 powered by GTK4_layer_Shell protocol  
 > &nbsp; [Main repo](https://github.com/KartofellFirst/Hotoe)
 
+**Requirements**
+---
+> [!NOTE]
+> Despite the fact Windows and MacOS provide native tools to access webview, most Linux distros refuse to ship it by default. <br>
+> Check if those are installed on your computer
+
++ `Gtk4LayerShell`
++ `Gtk (4.0)`
++ `WebKit (6.0)`
+
 **How it works**
 ---
 
