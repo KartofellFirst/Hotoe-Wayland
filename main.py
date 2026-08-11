@@ -1,7 +1,10 @@
-from ctypes import CDLL
-try:
-    CDLL('libgtk4-layer-shell.so')
-except: print("WTF?")
+from ctypes import CDLL, util
+CDLL(util.find_library("gtk4-layer-shell"))
+
+# from ctypes import CDLL
+# try:
+#     CDLL('libgtk4-layer-shell.so')
+# except: print("WTF?")
 
 import gi
 import sys
