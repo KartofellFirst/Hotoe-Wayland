@@ -9,7 +9,7 @@
 ---
 > [!NOTE]
 > Despite the fact Windows and MacOS provide native tools to access webview, most Linux distros refuse to ship it by default. <br>
-> Check if those are installed on your computer
+> Check if those are installed on your computer OR use [our CLI](https://github.com/KartofellFirst/Hotoe/releases) to do it for you
 
 + `Gtk4LayerShell`
 + `Gtk (4.0)`
