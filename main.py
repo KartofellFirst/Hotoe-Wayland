@@ -1,11 +1,6 @@
 from ctypes import CDLL, util
 CDLL(util.find_library("gtk4-layer-shell"))
 
-# from ctypes import CDLL
-# try:
-#     CDLL('libgtk4-layer-shell.so')
-# except: print("WTF?")
-
 import gi
 import sys
 import os
@@ -213,11 +208,13 @@ class HotoeEngine(Gtk.Application):
         self.ewa_main.grab_focus()
     
     def on_mouse_enter(self, controller, x, y):
+        Gtk4LayerShell.set_keyboard_mode(self.window, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
         self.ewa_main.grab_focus()
         self.call_event_js("focusEvent", "true")
-        
+
     def on_mouse_leave(self, controller):
         self.call_event_js("focusEvent", "false")
+        Gtk4LayerShell.set_keyboard_mode(self.window, Gtk4LayerShell.KeyboardMode.NONE)
 
     def update_input_region(self):
         surface = self.window.get_surface()
