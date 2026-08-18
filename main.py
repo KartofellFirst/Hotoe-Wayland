@@ -189,7 +189,7 @@ class HotoeEngine(Gtk.Application):
 
         self.window.set_default_size(self.monitor_w, self.monitor_h)
         self.window.set_resizable(False)
-        self.ewa_main.set_size_request(self.monitor_w/2, self.monitor_h/3)
+        self.ewa_main.set_size_request(self.monitor_w, self.monitor_h)
 
         self.window.present()
         self.window.connect("map", self.on_window_mapped)
