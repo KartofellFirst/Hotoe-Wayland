@@ -91,11 +91,8 @@ class HotoeEngine(Gtk.Application):
         w.set_background_color(Gdk.RGBA(0.0, 0.0, 0.0, 0.01))
         w.connect("load-changed", self.webview_page_status)
         w.connect("decide-policy", self.on_decide_policy)
-        self.initial_uri = f"file://{os.path.abspath('execute/hotoe-execute.html')}"
-        w.load_uri(self.initial_uri)
-
-        manager = WebKit.WebsiteDataManager.new_ephemeral()
-        ctx = WebKit.WebContext.new_with_website_data_manager(manager)
+        
+        ctx = w.get_context()
         ctx.set_cache_model(WebKit.CacheModel.DOCUMENT_VIEWER)
 
         settings = w.get_settings()
@@ -107,6 +104,9 @@ class HotoeEngine(Gtk.Application):
             inspector.connect("attach", self.on_inspector_attach)
             inspector.connect("detach", self.on_inspector_detach)
             inspector.connect("closed", self.on_inspector_detach)
+
+        self.initial_uri = f"file://{os.path.abspath('execute/hotoe-execute.html')}"
+        w.load_uri(self.initial_uri)
         
         content_manager = w.get_user_content_manager()
         content_manager.register_script_message_handler("busMessage")
