@@ -93,10 +93,15 @@ class HotoeEngine(Gtk.Application):
         w.connect("decide-policy", self.on_decide_policy)
         self.initial_uri = f"file://{os.path.abspath('execute/hotoe-execute.html')}"
         w.load_uri(self.initial_uri)
-        
+
+        manager = WebKit.WebsiteDataManager.new_ephemeral()
+        ctx = WebKit.WebContext.new_with_website_data_manager(manager)
+        ctx.set_cache_model(WebKit.CacheModel.DOCUMENT_VIEWER)
+
+        settings = w.get_settings()
+        settings.set_enable_page_cache(False)
         
         if DEBUG_TOOLS:
-            settings = w.get_settings()
             settings.set_enable_developer_extras(True)
             inspector = w.get_inspector()
             inspector.connect("attach", self.on_inspector_attach)
