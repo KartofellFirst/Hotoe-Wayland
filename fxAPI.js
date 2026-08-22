@@ -50,7 +50,9 @@ function rob() { // rob().then(keys => )
 function grab(key) { // grab(key).then(data => )
     return fx._callWithPromise("getValueFromCache", {key}) // im such a niche js dev.. knowing these shorthands. mom will be proud
 }
-    
+
+const SIR = "hotoe-input-region-regulator-box"
+
 fx = {
     // system-reserved fields
     _promises: {},
