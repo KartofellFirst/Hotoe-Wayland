@@ -2,57 +2,56 @@ Error.prototype.toJSON = function () {
     return { name: this.name, message: this.message, stack: this.stack };
 };
 
+function push(data) { // pushes the string into local IPC
+    window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify(data));
+}
+function SIRs() { // SIRs
+    window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify({fxAPICall: {RIR: true}}));
+}
+function CLOSE() { // CLOSE
+    window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify({fxAPICall: {CLOSE: true}}));
+}
+function read(filePath) { // read(path).then(file => log(file.content))
+    return fx._callWithPromise("readFile", { filePath: filePath });
+}
+function remove(filePath) { // remove(path) + optional .catch/.then
+    return fx._callWithPromise("removeFile", { filePath: filePath });
+}
+function write(filePath, content, isBase64 = false) { // write(path, content, isBase64?) + optional .catch/.then
+    return fx._callWithPromise("writeFile", { filePath: filePath, content: content, isBase64: isBase64 });
+}
+function scan(dirPath) { // scan()
+    return fx._callWithPromise("scanDirectory", { dirPath: dirPath });
+}
+function openExternal(URI) { // openExternal()
+    window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify({fxAPICall: {BROWSE: URI}}))
+}
+function exec(cmd, {timeout = 30000, daemon=false} = {}) { // exec() + optional .then/.catch
+    return fx._callWithPromise("execute", { cmd: cmd, timeout: timeout, daemon: daemon });
+}
+function hotkey(accelerator, eventName) { // hotkey() + optional .then/.catch
+    return fx._callWithPromise("registerHotkey", { accelerator: accelerator, eventName: eventName });
+}
+function kill(id) { // kill(pid/id) + optional .then/.catch
+    return fx._callWithPromise("killDaemon", { id: id });
+}
+function getDaemons() { // getDaemons().then
+    return fx._callWithPromise("getDaemons");
+}
+function store(data, key) { // store(data, key) 
+    window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify({fxAPICall: {STORE: {data, key}}})); // not sure if that shortening works in JS
+}
+function toss(key) { // toss(key)
+    return fx._callWithPromise("deleteFromCache", { key });
+}
+function rob() { // rob().then(keys => )
+    return fx._callWithPromise("getKeyValues")
+}
+function grab(key) { // grab(key).then(data => )
+    return fx._callWithPromise("getValueFromCache", {key}) // im such a niche js dev.. knowing these shorthands. mom will be proud
+}
+    
 fx = {
-    pushString: function(data) { // pushes the string into local IPC
-        window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify(data));
-    },
-    recalculateInputRegions: function() { // SIRs
-        window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify({fxAPICall: {RIR: true}}));
-    },
-    closeApplication: function() { // CLOSE
-        window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify({fxAPICall: {CLOSE: true}}));
-    },
-    requestFileContent: function(filePath) { // read(path).then(file => log(file.content))
-        return this._callWithPromise("readFile", { filePath: filePath });
-    },
-    removeFile: function(filePath) { // remove(path) + optional .catch/.then
-        return this._callWithPromise("removeFile", { filePath: filePath });
-    },
-    writeFile: function(filePath, content, isBase64 = false) { // write(path, content, isBase64?) + optional .catch/.then
-        return this._callWithPromise("writeFile", { filePath: filePath, content: content, isBase64: isBase64 });
-    },
-    scanDirectory: function(dirPath) { // scan()
-        return this._callWithPromise("scanDirectory", { dirPath: dirPath });
-    },
-    openExternal: function(URI) { // openExternal()
-        window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify({fxAPICall: {BROWSE: URI}}))
-    },
-    execute: function(cmd, {timeout = 30000, daemon=false} = {}) { // exec() + optional .then/.catch
-        return this._callWithPromise("execute", { cmd: cmd, timeout: timeout, daemon: daemon });
-    },
-    registerHotkey: function(accelerator, eventName) { // hotkey() + optional .then/.catch
-        return this._callWithPromise("registerHotkey", { accelerator: accelerator, eventName: eventName });
-    },
-    killDaemon: function(id) { // kill(pid/id) + optional .then/.catch
-        return this._callWithPromise("killDaemon", { id: id });
-    },
-    getDaemons: function() { // getDaemons().then
-        return this._callWithPromise("getDaemons");
-    },
-    saveToCache: function(data, key) { // strore(data, key) 
-        window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify({fxAPICall: {STORE: {data, key}}})); // not sure if that shortening works in JS
-    },
-    deleteFromCache: function(key) { // toss(key)
-        return this._callWithPromise("deleteFromCache", { key });
-    },
-    getKeyValues: function() { // rob().then(keys => )
-        return this._callWithPromise("getKeyValues")
-    },
-    getValueFromCache: function(key) { // grab(key).then(data => )
-        return this._callWithPromise("getValueFromCache", {key}) // im such a niche js dev.. knowing these shorthands. mom will be proud
-    },
-    
-    
     // system-reserved fields
     _promises: {},
     _callCounter: 0,
