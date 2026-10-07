@@ -47,16 +47,30 @@ class HotoeEngine(Gtk.Application):
         self.setup_hotkey_bus()
 
     def setup_message_bus(self):
-        """Setup ZeroMQ pub/sub message bus"""
         context = zmq.Context()
         
+        # local
         self.pub_socket = context.socket(zmq.PUB)
         self.pub_socket.bind(BUS_ADDR)
-        
         self.sub_socket = context.socket(zmq.SUB)
         self.sub_socket.connect(BUS_ADDR)
         self.sub_socket.setsockopt_string(zmq.SUBSCRIBE, "")
-        
+
+        # public
+        self.xpub = context.socket(zmq.XPUB)
+        self.xpub.bind("ipc://sub.ipc")
+        self.xsub = context.socket(zmq.XSUB)
+        self.xsub.bind("ipc://pub.ipc")
+
+        def proxy(): zmq.proxy(self.xsub, self.xpub)
+        threading.Thread(target=proxy, daemon=True).start()
+ 
+        def bridge(): 
+            while True: 
+                msg = self.xsub.recv()
+                self.pub_socket.send(msg)
+
+        threading.Thread(target=bridge, daemon=True).start()
         threading.Thread(target=self.message_listener, daemon=True).start()
         
         print("Message bus running on " + BUS_ADDR)
@@ -77,6 +91,10 @@ class HotoeEngine(Gtk.Application):
                 match = self.hotkey_events.get(combo)
                 if match:
                     GLib.idle_add(self.call_event_js, match, {})
+                    Gtk4LayerShell.set_keyboard_mode(self.window, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
+                    GLib.idle_add(Gtk4LayerShell.set_keyboard_mode, self.window, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
+                    GLib.idle_add(self.ewa_main.grab_focus)
+                    
                     self.hotkey_rep.send_string("ok")
                 else:
                     self.hotkey_rep.send_string("unregistered")
@@ -91,22 +109,17 @@ class HotoeEngine(Gtk.Application):
         w.set_background_color(Gdk.RGBA(0.0, 0.0, 0.0, 0.01))
         w.connect("load-changed", self.webview_page_status)
         w.connect("decide-policy", self.on_decide_policy)
+        self.initial_uri = f"file://{os.path.abspath('execute/hotoe-execute.html')}"
+        w.load_uri(self.initial_uri)
         
-        ctx = w.get_context()
-        ctx.set_cache_model(WebKit.CacheModel.DOCUMENT_VIEWER)
-
-        settings = w.get_settings()
-        settings.set_enable_page_cache(False)
         
         if DEBUG_TOOLS:
+            settings = w.get_settings()
             settings.set_enable_developer_extras(True)
             inspector = w.get_inspector()
             inspector.connect("attach", self.on_inspector_attach)
             inspector.connect("detach", self.on_inspector_detach)
             inspector.connect("closed", self.on_inspector_detach)
-
-        self.initial_uri = f"file://{os.path.abspath('execute/hotoe-execute.html')}"
-        w.load_uri(self.initial_uri)
         
         content_manager = w.get_user_content_manager()
         content_manager.register_script_message_handler("busMessage")
@@ -246,6 +259,7 @@ class HotoeEngine(Gtk.Application):
                 data = json.loads(message)
                 
                 print(f"[BUS RECEIVED] {data}")
+                self.xpub.send_string(message)
                 
                 self.call_event_js("busMessage", data)
                     
@@ -258,6 +272,7 @@ class HotoeEngine(Gtk.Application):
         """Publish a message to the bus"""
         try:
             self.pub_socket.send_string(json.dumps(data))
+
         except Exception as e:
             print(f"Bus publish error: {e}")
             
@@ -607,4 +622,3 @@ if __name__ == '__main__':
     ensure_hhotkey_installed() # Only Wayland thing
     app = HotoeEngine()
     sys.exit(app.run(sys.argv))
-
