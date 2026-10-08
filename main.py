@@ -12,7 +12,6 @@ import time
 import base64
 import mimetypes
 import subprocess
-import uuid
 import signal
 gi.require_version('Gtk', '4.0')
 gi.require_version('Gtk4LayerShell', '1.0')
@@ -27,7 +26,6 @@ with open("manifest.json", 'r') as f:
     d = json.load(f)
     APP_ID = d.get("id", "com.github.random-app")
     DEBUG_TOOLS = d.get("debug", False)
-from hotkeysWaylandFix import HotkeyBindNotification
 from style import load_css
 
 
@@ -39,15 +37,13 @@ class HotoeEngine(Gtk.Application):
         )
         
         self.input_regions = [[0, 0, 0, 0]]
-        self.system_input_regions = [[0, 0, 0, 0]] # Wayland thing only
-        self.system_popup = False # Wayland thing only
-        self.hotkey_events = {}
+        self.system_input_regions = [[0, 0, 0, 0]]
         self.running = True
         self.setup_message_bus()
-        self.setup_hotkey_bus()
-
+        
     def setup_message_bus(self):
         context = zmq.Context()
+        self.pub_lock = threading.Lock()
         
         # local
         self.pub_socket = context.socket(zmq.PUB)
@@ -61,44 +57,22 @@ class HotoeEngine(Gtk.Application):
         self.xpub.bind("ipc://sub.ipc")
         self.xsub = context.socket(zmq.XSUB)
         self.xsub.bind("ipc://pub.ipc")
+        self.xsub.send(b"\x01")
 
-        def proxy(): zmq.proxy(self.xsub, self.xpub)
-        threading.Thread(target=proxy, daemon=True).start()
- 
         def bridge(): 
             while True: 
                 msg = self.xsub.recv()
-                self.pub_socket.send(msg)
+                with self.pub_lock: self.pub_socket.send(msg)
 
         threading.Thread(target=bridge, daemon=True).start()
         threading.Thread(target=self.message_listener, daemon=True).start()
         
-        print("Message bus running on " + BUS_ADDR)
-
-    def setup_hotkey_bus(self):
-        context = zmq.Context.instance()
-        self.hotkey_rep = context.socket(zmq.REP)
-        self.hotkey_rep.bind(f"ipc:///run/user/{os.getuid()}/hotoe-hotkeys.ipc")
-        threading.Thread(target=self.hotkey_listener, daemon=True).start()
-
-    def hotkey_listener(self):
-        poller = zmq.Poller()
-        poller.register(self.hotkey_rep, zmq.POLLIN)
-        while self.running:
-            events = dict(poller.poll(timeout=200)) 
-            if self.hotkey_rep in events:
-                combo = self.hotkey_rep.recv_string()
-                match = self.hotkey_events.get(combo)
-                if match:
-                    GLib.idle_add(self.call_event_js, match, {})
-                    Gtk4LayerShell.set_keyboard_mode(self.window, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
-                    GLib.idle_add(Gtk4LayerShell.set_keyboard_mode, self.window, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
-                    GLib.idle_add(self.ewa_main.grab_focus)
-                    
-                    self.hotkey_rep.send_string("ok")
-                else:
-                    self.hotkey_rep.send_string("unregistered")
-        
+        print("Local message buses running on ipc://pub.ipc and ipc://sub.ipc")
+        print("starting", end="")
+        for i in range(0, 8):
+            print(".", end="", flush=True)
+            time.sleep(0.02)
+        print('DONE (¬_¬")')
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
@@ -182,12 +156,7 @@ class HotoeEngine(Gtk.Application):
 
         self.ewa_main.add_tick_callback(self.on_animation_frame)
 
-        # notification_overlay is only Wayland thing for now. you dont need this in other engines ithink
-        self.notification_overlay = Gtk.Overlay()
-        self.notification_overlay.set_child(self.main)
-        self.notification_overlay.set_css_classes(["overlay"])
-        self.window.set_child(self.notification_overlay)
-
+        self.window.set_child(self.main)
         display = Gdk.Display.get_default()
         monitors = display.get_monitors()
 
@@ -204,8 +173,8 @@ class HotoeEngine(Gtk.Application):
         self.window.set_resizable(False)
         self.ewa_main.set_size_request(self.monitor_w, self.monitor_h)
 
-        self.window.present()
         self.window.connect("map", self.on_window_mapped)
+        self.window.present()
         
         self.ewa_main.grab_focus()
         
@@ -261,18 +230,15 @@ class HotoeEngine(Gtk.Application):
                 print(f"[BUS RECEIVED] {data}")
                 self.xpub.send_string(message)
                 
-                self.call_event_js("busMessage", data)
-                    
+                GLib.idle_add(self.call_event_js, "busMessage", data)
             except zmq.Again:
                 time.sleep(0.01)
             except Exception as e:
                 print(f"Message listener error: {e}")
 
     def publish(self, data):
-        """Publish a message to the bus"""
-        try:
-            self.pub_socket.send_string(json.dumps(data))
-
+        try: 
+            with self.pub_lock: self.pub_socket.send_string(json.dumps(data))
         except Exception as e:
             print(f"Bus publish error: {e}")
             
@@ -371,7 +337,7 @@ class HotoeEngine(Gtk.Application):
     
     def _exec_thread(self, call_id, payload):
         cmd = payload["cmd"]
-        # timeout_ms = None
+        timeout_ms = None
         if not payload.get("daemon", False): timeout_ms = payload.get("timeout", 30000)
         try:
             if timeout_ms:
@@ -442,34 +408,6 @@ class HotoeEngine(Gtk.Application):
 
         # standard ~
         return os.path.abspath(os.path.expanduser(path_str))
-
-
-    def _handle_register_hotkey(self, call_id, accelerator, event_name):
-        normalized = self._normalize_combo(accelerator)
-        notif = HotkeyBindNotification(self.window, self.notification_overlay)
-        self.system_input_regions = [[self.monitor_w-296, 0, 296, 180]] 
-
-        def on_copied():
-            self.system_input_regions = [[0, 0, 0, 0]] 
-            self.update_input_region()
-            self.hotkey_events[normalized] = event_name
-            self.resolve_js_promise(call_id, result={"registered": True, "method": "manually"})
-            
-        def on_denied():
-            self.system_input_regions = [[0, 0, 0, 0]] 
-            self.update_input_region()
-            self.resolve_js_promise(call_id, error="user denied hotkey registration")
-            
-        notif.show(
-            command=f"hhotkey {normalized}",
-            help_url=f"https://KartofellFirst.github.io/HotoeWH?accelerator={normalized}",
-            on_copied=on_copied,
-            on_denied=on_denied
-        )
-
-    def _normalize_combo(self, accelerator):
-        parts = [p.strip().upper() for p in accelerator.replace(" ", "").split("+")]
-        return "+".join(parts)
 
     
     # ===== fx API =====
@@ -570,8 +508,6 @@ class HotoeEngine(Gtk.Application):
                 data["cache"].pop(payload["key"], None) 
                 with open(path, 'w') as f: json.dump(data, f)
                 self.resolve_js_promise(call_id, None, True)
-            elif action == "registerHotkey":
-                self._handle_register_hotkey(call_id, payload.get("accelerator"), payload.get("eventName"))
                         
             
     #> ENGINE to JS <#
@@ -597,28 +533,8 @@ class HotoeEngine(Gtk.Application):
         
         # GLib.idle_add ensures GTK UI thread safety if called from background thread
         GLib.idle_add(lambda: self.ewa_main.evaluate_javascript(js, -1, None, None, None, None, None))
- 
- 
-# hhotkey installation insurance universal
-# user must have his ~/bin directory be added to PATH
-def ensure_hhotkey_installed():
-    import shutil
-    from pathlib import Path
-    
-    source_file = Path("hhotkey")
-    target_dir = Path.home() / "bin"
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target_file = target_dir / "hhotkey"
-    
-    if source_file.exists():
-        shutil.copy2(source_file, target_file)
-        target_file.chmod(0o755)
-        print(f"[hotoe] hhotkey installed to {target_file}")
-        return True
-    return False
 
 
 if __name__ == '__main__':
-    ensure_hhotkey_installed() # Only Wayland thing
     app = HotoeEngine()
     sys.exit(app.run(sys.argv))
