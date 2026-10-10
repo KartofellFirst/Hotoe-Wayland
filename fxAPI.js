@@ -85,3 +85,42 @@ fx = {
         }
     }
 };
+
+// advanced input region calculation (with rotates and border radius) (requires testing)
+function shapeRects(el, step = 2) {
+    const r  = el.getBoundingClientRect()
+    const cs = getComputedStyle(el)
+    const w = el.offsetWidth; const h = el.offsetHeight;
+    const rad = Math.min(parseFloat(cs.borderTopLeftRadius) || 0, w / 2, h / 2);
+    
+    const m = new DOMMatrix(cs.transform === 'none' ? undefined : cs.transform);
+    m.e = 0; m.f = 0; const inv = m.inverse();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+
+    const inside = (x, y) => { 
+        const p = inv.transformPoint({ x: x - cx, y: y - cy })
+        const dx = Math.max(Math.abs(p.x) - (w / 2 - rad), 0)
+        const dy = Math.max(Math.abs(p.y) - (h / 2 - rad), 0)
+        return Math.abs(p.x) <= w / 2 && Math.abs(p.y) <= h / 2 && dx * dx + dy * dy <= rad * rad;
+    };
+
+    const out = []
+    const x0 = Math.floor(r.left), x1 = Math.ceil(r.right);
+    for (let y = Math.floor(r.top); y < Math.ceil(r.bottom); y += step) {
+        let start = null;
+        for (let x = x0; x <= x1; x += step) { 
+            const ok = inside(x + step / 2, y + step / 2)
+            if (ok && start === null) start = x;
+            if (!ok && start !== null) { out.push([start, y, x - start, step]); start = null; } 
+        }
+        if (start !== null) out.push([start, y, x1 - start, step]);
+    }
+    
+    return out;
+}
+
+window.computeRegions = () => {
+    const regions = [];
+    document.querySelectorAll('.hotoe-input-region-regulator-box').forEach(el => regions.push(...shapeRects(el)));
+    window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify({ fxAPICall: { SIRs: regions }}))
+}
