@@ -13,6 +13,7 @@ import base64
 import mimetypes
 import subprocess
 import signal
+import math 
 gi.require_version('Gtk', '4.0')
 gi.require_version('Gtk4LayerShell', '1.0')
 gi.require_version('WebKit', '6.0')
@@ -434,14 +435,18 @@ class HotoeEngine(Gtk.Application):
         if "SIRs" in data.keys():
             regions = []
             for l in data["SIRs"]:
-                for i, el in enumerate(l):
-                    l[i] = max(0, int(el))
-                regions.append(l)
+                try:
+                    x, y, w, h = l
+                    x0 = max(0, math.floor(x))
+                    y0 = max(0, math.floor(y))
+                    x1 = min(self.monitor_w, math.ceil(x + w))
+                    y1 = min(self.monitor_h, math.ceil(y + h))
+                except (TypeError, ValueError, OverflowError):
+                    continue
+                if x1 > x0 and y1 > y0:
+                    regions.append([x0, y0, x1 - x0, y1 - y0])
             self.input_regions = regions
             GLib.idle_add(self.update_input_region)
-            return
-        if "RIR" in data.keys():
-            self.update_regions_using_html()
             return
         if "CLOSE" in data.keys():
             self.close_application()
@@ -515,23 +520,13 @@ class HotoeEngine(Gtk.Application):
         js = f"window.dispatchEvent(new CustomEvent('{event_name}', {{ detail: {json.dumps(detail)} }}));"
         self.ewa_main.evaluate_javascript(js, -1, None, None, None, None, None)
         
-    def update_regions_using_html(self):
-        """if you dont wrap js code into single-time-use function, you'll get conflicts while creating const data = [///]"""
-        js = """(function() { const data = {fxAPICall: {SIRs: []}};
-            document.querySelectorAll('.hotoe-input-region-regulator-box').forEach((el) => { 
-                const rect = el.getBoundingClientRect();
-                data.fxAPICall.SIRs.push([rect.left, rect.top, rect.width, rect.height]);
-            });
-            window.webkit.messageHandlers.busMessage.postMessage(JSON.stringify(data));
-        })();"""
-        self.ewa_main.evaluate_javascript(js, -1, None, None, None, None, None)
+    def update_regions_using_html(self): 
+        self.ewa_main.evaluate_javascript("SIRs()", -1, None, None, None, None, None)
         
     def resolve_js_promise(self, call_id, error=None, result=None):
         err_json = json.dumps(error) if error else "null"
         res_json = json.dumps(result) if result is not None else "null"
         js = f"fx._resolvePromise({json.dumps(call_id)}, {err_json}, {res_json});"
-        
-        # GLib.idle_add ensures GTK UI thread safety if called from background thread
         GLib.idle_add(lambda: self.ewa_main.evaluate_javascript(js, -1, None, None, None, None, None))
 
 
