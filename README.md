@@ -59,17 +59,6 @@ step-by-step engine logic:
 (You will have to rewrite _fxAPI.js_ for your engine specifically, but it mostly just changing webview method names)<br>
 (On release you put _fxAPI.js_ and _EngineFiles.zip_ or _EngineExecutableStandalone_ separately)
 
-## Wayland special
-`hhotkeys` is a CLI integrated inside of Hotoe-Wayland engine. 
-
-You can use it in your non-hotoe app:  
-Setup a global IPC at <br>
-`ipc:///run/user/<your_identifier>/hotoe-hotkeys.ipc`
-
-Once user calls `hhotkey <combo>` from terminal or bind <br>hhotkeys registers as a publisher in your IPC and sends the combo. <br>
-
-e.g. `SUPER+SHIFT+W`
-
 ## Learn more about EWAs and the Hotoe-Engine
 - [Hotoe-MacOS](https://github.com/KartofellFirst/Hotoe-MacOS) 
 - [Hotoe-Windows](https://github.com/FaultedSapiens/Hotoe-Windows) 
